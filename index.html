@@ -8,7 +8,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&family=Young+Serif&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+<script>
+window.addEventListener('error',function(e){
+  var b=document.getElementById('errbox');
+  if(!b){b=document.createElement('pre');b.id='errbox';b.style.cssText='position:fixed;z-index:99;left:8px;right:8px;bottom:8px;max-height:40vh;overflow:auto;margin:0;padding:10px;background:#3a0d0d;color:#ffd7d0;border:1px solid #c8432f;font:12px/1.4 monospace;white-space:pre-wrap';document.body.appendChild(b);}
+  b.textContent+='GALAT: '+(e.message||'?')+(e.filename?'\n  '+e.filename+':'+e.lineno:'')+(e.error&&e.error.stack?'\n'+e.error.stack.split('\n').slice(0,4).join('\n'):'')+'\n';
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-v1.5.0.min.js" crossorigin="anonymous"></script>
 <style>
 /* Tata letak: pemandangan 3D layar penuh; panel belajar di kanan (desktop) atau lembar bawah (ponsel). */
 :root{
@@ -130,7 +137,7 @@ dialog li{margin:6px 0}
 </head>
 <body>
 
-<a-scene id="scene" ar-hit-test="target:#anchor; enabled:false" renderer="antialias:true" vr-mode-ui="enabled:false" loading-screen="enabled:false"
+<a-scene id="scene" renderer="antialias:true" vr-mode-ui="enabled:false" loading-screen="enabled:false"
          device-orientation-permission-ui="enabled:false"
          webxr="optionalFeatures: hit-test, dom-overlay, local-floor; overlayElement: #overlay">
 
@@ -728,9 +735,9 @@ function startApp() {
     if (mode === 'vr') { stage.object3D.scale.set(.08, .08, .08); stage.object3D.position.set(0, .75, -1.7); rig.object3D.position.set(0, 0, 0); rig.object3D.rotation.set(0, 0, 0); sceneEl.object3D.background = skyTex; }
     if (mode === 'ar') { stage.object3D.scale.set(.05, .05, .05); stage.object3D.position.set(0, 0, 0); anchor.object3D.position.set(0, 0, -1.2); rig.object3D.position.set(0, 0, 0); rig.object3D.rotation.set(0, 0, 0); sceneEl.object3D.background = null; }
   }
-  sceneEl.addEventListener('enter-vr', () => { const ar = sceneEl.is('ar-mode'); setMode(ar ? 'ar' : 'vr'); if (ar) { sceneEl.setAttribute('ar-hit-test', 'enabled', true); toast('Arahkan ponsel ke lantai atau meja, lalu ketuk untuk menaruh lopi.'); } });
-  sceneEl.addEventListener('exit-vr', () => { sceneEl.setAttribute('ar-hit-test', 'enabled', false); setMode('desk'); });
-  sceneEl.addEventListener('ar-hit-test-select', () => { sceneEl.setAttribute('ar-hit-test', 'enabled', false); toast('Lopi ditaruh. Atur transformasinya lewat panel.'); });
+  sceneEl.addEventListener('enter-vr', () => { const ar = sceneEl.is('ar-mode'); setMode(ar ? 'ar' : 'vr'); if (ar) { sceneEl.setAttribute('ar-hit-test', 'target:#anchor; enabled:true'); toast('Arahkan ponsel ke lantai atau meja, lalu ketuk untuk menaruh lopi.'); } });
+  sceneEl.addEventListener('exit-vr', () => { sceneEl.removeAttribute('ar-hit-test'); setMode('desk'); });
+  sceneEl.addEventListener('ar-hit-test-select', () => { sceneEl.removeAttribute('ar-hit-test'); toast('Lopi ditaruh. Atur transformasinya lewat panel.'); });
   async function enter(kind) {
     if (!navigator.xr) { toast('Peramban ini belum mendukung WebXR. Mode 3D layar tetap bisa dipakai. Untuk AR gunakan Chrome Android, untuk VR gunakan headset.'); return; }
     try {
@@ -746,7 +753,8 @@ function startApp() {
   setMission(0);
   window.__lopi = { S, MISSIONS, matrixOf, poseDelta, setMission, refresh, evalMission };
 }
-if (sceneEl.hasLoaded) startApp(); else sceneEl.addEventListener('loaded', startApp);
+function safeStart() { try { startApp(); } catch (e) { window.dispatchEvent(new ErrorEvent('error', { message: 'startApp: ' + e.message, error: e })); } }
+if (sceneEl.hasLoaded) safeStart(); else sceneEl.addEventListener('loaded', safeStart);
 </script>
 </body>
 </html>
