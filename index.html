@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lopi Transformasi</title>
+<meta name="description" content="Media pembelajaran AR/VR berbasis GenAI untuk transformasi 3D (translasi, rotasi, skala) pada perahu Pinisi.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&family=Young+Serif&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+<style>
+/* Tata letak: pemandangan 3D layar penuh; panel belajar di kanan (desktop) atau lembar bawah (ponsel). */
+:root{
+  --ink:#0b1626; --panel:rgba(11,22,38,.92); --line:rgba(243,236,217,.16);
+  --text:#f3ecd9; --muted:#a3b4c2; --gold:#e3a72f; --lipa:#c8432f; --sea:#2a9d8f; --ok:#7ccf8a; --warn:#f0a35e;
+  --font-d:'Young Serif',Georgia,serif; --font-b:'Hanken Grotesk',system-ui,sans-serif; --font-m:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--ink);color:var(--text);font:15px/1.5 var(--font-b);overflow:hidden}
+a-scene{position:fixed;inset:0}
+#overlay{position:fixed;inset:0;pointer-events:none;z-index:5}
+#overlay > *{pointer-events:auto}
+button{font:inherit;color:inherit}
+.btn{background:var(--gold);color:#1a1205;border:0;border-radius:6px;padding:8px 14px;font-weight:700;cursor:pointer;min-height:40px}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:rgba(11,22,38,.7);color:var(--text);border:1px solid var(--line)}
+.btn.small{min-height:32px;padding:4px 10px;font-size:13px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+#top{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;
+  padding-top:max(12px,env(safe-area-inset-top,0px));padding-bottom:8px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+#top > *{pointer-events:auto}
+.brand{display:flex;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px 8px 10px;min-width:0}
+.brand svg{width:34px;height:34px;flex:none}
+.brand h1{font:400 20px/1.1 var(--font-d);margin:0;letter-spacing:.01em}
+.brand p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+
+#panel{position:fixed;right:max(16px,env(safe-area-inset-right,0px));top:calc(72px + env(safe-area-inset-top,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));
+  width:392px;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-height:0}
+.phead{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.progress{display:flex;gap:6px}
+.progress svg{width:26px;height:26px}
+.progress .d{fill:none;stroke:var(--muted);stroke-width:2}
+.progress .on .d{fill:var(--gold);stroke:var(--gold)}
+.tabs{display:flex;gap:4px;flex:1;min-width:0}
+.tabs button{flex:1;white-space:nowrap;background:transparent;border:0;border-bottom:2px solid transparent;padding:6px 4px;cursor:pointer;color:var(--muted);font-weight:500}
+.tabs button[aria-selected="true"]{color:var(--text);border-bottom-color:var(--gold)}
+.fold{background:transparent;border:1px solid var(--line);border-radius:6px;width:32px;height:32px;cursor:pointer;color:var(--muted)}
+.pane{padding:12px 14px 16px;overflow-y:auto;flex:1;min-height:0}
+#panel.folded .pane{display:none}
+#panel.folded{bottom:auto}
+
+.mnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.mnav button{background:transparent;border:1px solid var(--line);border-radius:999px;padding:3px 11px;font-size:13px;cursor:pointer;color:var(--muted)}
+.mnav button[aria-current="true"]{border-color:var(--gold);color:var(--text);background:rgba(227,167,47,.12)}
+.mnav button.done::after{content:" ✓";color:var(--ok)}
+.card h2{font:400 21px/1.2 var(--font-d);margin:0 0 4px;text-wrap:balance}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin:0 0 4px}
+.card p{margin:6px 0}
+.story{color:#dfd6c0}
+.goal{border-left:3px solid var(--sea);padding-left:10px;margin:10px 0}
+.status{font-family:var(--font-m);font-size:13px;background:rgba(255,255,255,.05);border-radius:6px;padding:8px 10px;margin:10px 0}
+.status.ok{background:rgba(124,207,138,.14);color:var(--ok)}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.quiz{background:rgba(255,255,255,.05);border-radius:8px;padding:10px;margin:10px 0}
+.quiz button{display:block;width:100%;text-align:left;background:transparent;border:1px solid var(--line);border-radius:6px;padding:7px 10px;margin:6px 0 0;cursor:pointer}
+.quiz button.good{border-color:var(--ok);background:rgba(124,207,138,.12)}
+.quiz button.bad{border-color:var(--warn)}
+textarea,input[type=text],input[type=url]{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:6px;color:var(--text);padding:8px 10px;font:inherit}
+textarea{resize:vertical;min-height:64px}
+
+.ctrls{border:1px solid var(--line);border-radius:8px;margin:14px 0 0;padding:6px 12px 10px;min-width:0}
+.ctrls legend{padding:0 6px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:78px 1fr 58px;align-items:center;gap:8px;padding:3px 0}
+.ctl label{font-size:13px}
+.ctl output{font-family:var(--font-m);font-size:12px;text-align:right;color:var(--gold)}
+.ctl.locked{opacity:.38}
+.ctl input[type=range]{width:100%;accent-color:var(--gold);min-width:0}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:8px}
+.seg button{flex:1;background:transparent;border:0;padding:6px;cursor:pointer;font-family:var(--font-m);font-size:13px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--gold);color:#1a1205;font-weight:700}
+.seg button[disabled]{opacity:.4;cursor:not-allowed}
+
+.formula{font-family:var(--font-m);font-size:15px;color:var(--gold);margin:4px 0 8px}
+.mat{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;font-family:var(--font-m);font-size:13px;margin:8px 0;background:rgba(255,255,255,.04);padding:8px;border-radius:8px}
+.mat span{text-align:right;padding:4px 3px;border-radius:3px;font-variant-numeric:tabular-nums}
+.mat .r{color:#8fd6cf}
+.mat .t{color:var(--gold);background:rgba(227,167,47,.1)}
+.mat .h{color:var(--muted)}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.mono{font-family:var(--font-m);font-size:13px}
+.note{font-size:13px;color:var(--muted)}
+details{margin:10px 0}
+summary{cursor:pointer;color:var(--muted);font-size:13px}
+
+#chat{display:flex;flex-direction:column;gap:8px;margin:10px 0;max-height:34vh;overflow-y:auto}
+.msg{padding:8px 11px;border-radius:8px;max-width:92%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
+.msg.ai{background:rgba(42,157,143,.18);align-self:flex-start}
+.msg.me{background:rgba(227,167,47,.18);align-self:flex-end}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.chips button{background:transparent;border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;color:var(--muted)}
+.pill{display:inline-block;font-size:12px;border-radius:999px;padding:2px 10px;background:rgba(255,255,255,.08)}
+.pill.live{background:rgba(124,207,138,.18);color:var(--ok)}
+.pill.off{background:rgba(240,163,94,.16);color:var(--warn)}
+
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(18px,env(safe-area-inset-bottom,0px));background:#102a43;border:1px solid var(--gold);padding:9px 16px;border-radius:8px;max-width:min(520px,calc(100vw - 32px));opacity:0;transition:opacity .25s;pointer-events:none;z-index:9;text-align:center}
+#toast.show{opacity:1}
+dialog{background:var(--ink);color:var(--text);border:1px solid var(--gold);border-radius:10px;max-width:min(560px,calc(100vw - 32px));padding:18px 20px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h2{font:400 22px var(--font-d);margin:0 0 8px}
+dialog li{margin:6px 0}
+
+@media (max-width:760px){
+  .brand p{display:none}
+  .brand h1{font-size:17px}
+  #top{flex-direction:column;align-items:stretch}
+  .tools{justify-content:flex-start}
+  .btn{padding:6px 10px;min-height:36px;font-size:13px}
+  #panel{left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px));width:auto;top:auto;bottom:max(8px,env(safe-area-inset-bottom,0px));max-height:52vh}
+  #chat{max-height:22vh}
+}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+</head>
+<body>
+
+<a-scene id="scene" ar-hit-test="target:#anchor; enabled:false" renderer="antialias:true" vr-mode-ui="enabled:false" loading-screen="enabled:false"
+         device-orientation-permission-ui="enabled:false"
+         webxr="optionalFeatures: hit-test, dom-overlay, local-floor; overlayElement: #overlay">
+
+  <a-entity light="type:ambient;color:#9db4d9;intensity:.7"></a-entity>
+  <a-entity light="type:directional;color:#ffd8a0;intensity:1.15" position="-6 10 6"></a-entity>
+  <a-entity light="type:directional;color:#6f8fc4;intensity:.35" position="8 4 -6"></a-entity>
+
+  <a-entity id="rig" orbit-rig position="0 4 14">
+    <a-camera id="cam" position="0 0 0" look-controls="enabled:false" wasd-controls="enabled:false" fov="55"></a-camera>
+    <a-entity id="handL" laser-controls="hand:left" raycaster="objects:.vrbtn;far:3;lineColor:#e3a72f;lineOpacity:.8"></a-entity>
+    <a-entity id="handR" laser-controls="hand:right" raycaster="objects:.vrbtn;far:3;lineColor:#e3a72f;lineOpacity:.8"></a-entity>
+    <a-entity id="vrPanel" visible="false" position="0 1.3 -1.0"></a-entity>
+  </a-entity>
+
+  <a-entity id="anchor">
+    <a-entity id="stage">
+      <a-entity id="sea"></a-entity>
+      <a-entity id="boat"></a-entity>
+      <a-entity id="ghost"></a-entity>
+      <a-entity id="marker"></a-entity>
+    </a-entity>
+  </a-entity>
+</a-scene>
+
+<div id="overlay">
+  <header id="top">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 2 38 20 20 38 2 20Z" fill="none" stroke="#e3a72f" stroke-width="2"/><path d="M20 10 30 20 20 30 10 20Z" fill="#c8432f"/><path d="M20 15 25 20 20 25 15 20Z" fill="#f3ecd9"/></svg>
+      <div><h1>Lopi Transformasi</h1><p>Grafika Komputer · transformasi 3D pada perahu Pinisi</p></div>
+    </div>
+    <div class="tools">
+      <button id="btnSound" class="btn ghost" aria-pressed="false">Suara: mati</button>
+      <button id="btnCam" class="btn ghost">Atur kamera</button>
+      <button id="btnInfo" class="btn ghost">Tentang Pinisi</button>
+      <button id="btnVR" class="btn">Mode VR</button>
+      <button id="btnAR" class="btn">Mode AR</button>
+    </div>
+  </header>
+
+  <aside id="panel" aria-label="Panel belajar">
+    <div class="phead">
+      <div id="progress" class="progress" role="img" aria-label="Kemajuan"></div>
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tabMisi" aria-selected="true" aria-controls="paneMisi">Misi</button>
+        <button role="tab" id="tabMat" aria-selected="false" aria-controls="paneMat">Matriks</button>
+        <button role="tab" id="tabAI" aria-selected="false" aria-controls="paneAI">Daeng AI</button>
+      </div>
+      <button id="btnFold" class="fold" aria-label="Ciutkan panel" aria-expanded="true">–</button>
+    </div>
+
+    <section id="paneMisi" class="pane" role="tabpanel" aria-labelledby="tabMisi">
+      <nav id="missionNav" class="mnav" aria-label="Daftar misi"></nav>
+      <article id="missionCard" class="card"></article>
+      <fieldset class="ctrls" id="ctrls">
+        <legend>Kontrol transformasi</legend>
+        <div id="sliders"></div>
+        <div class="seg" role="group" aria-label="Urutan komposisi matriks">
+          <button id="ordTRS" aria-pressed="true">M = T · R · S</button>
+          <button id="ordRTS" aria-pressed="false">M = R · T · S</button>
+        </div>
+        <p class="note" id="orderNote" style="margin:6px 0 0"></p>
+      </fieldset>
+    </section>
+
+    <section id="paneMat" class="pane" role="tabpanel" aria-labelledby="tabMat" hidden>
+      <p class="eyebrow">Matriks homogen 4 × 4</p>
+      <div class="formula" id="formula"></div>
+      <div class="mat" id="matGrid" aria-label="Matriks transformasi"></div>
+      <div class="legend"><span><i style="background:#8fd6cf"></i>rotasi × skala (3×3)</span><span><i style="background:#e3a72f"></i>translasi (kolom ke-4)</span></div>
+      <p class="note">Titik <span class="mono">p'</span> diperoleh dari <span class="mono">p' = M · p</span>. Contoh titik ujung haluan:</p>
+      <div class="status" id="pointCalc"></div>
+      <details open>
+        <summary>Cara membaca urutan</summary>
+        <p class="note">Matriks paling kanan dikenakan paling dulu. Pada <b>T · R · S</b> lopi diperbesar, diputar pada porosnya sendiri, lalu digeser. Pada <b>R · T · S</b> lopi diperbesar, digeser, lalu seluruh posisinya diputar mengelilingi titik asal dunia.</p>
+      </details>
+    </section>
+
+    <section id="paneAI" class="pane" role="tabpanel" aria-labelledby="tabAI" hidden>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <p class="eyebrow" style="margin:0">Daeng Pinisi · tutor GenAI</p>
+        <span id="aiPill" class="pill off">Mode luring</span>
+      </div>
+      <div id="chat" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form id="chatForm">
+        <label for="chatIn" class="note">Tanya Daeng tentang misi atau matriks</label>
+        <textarea id="chatIn" rows="2" placeholder="Mis. mengapa lopi berputar mengelilingi titik asal?"></textarea>
+        <div class="row-actions"><button class="btn small" type="submit">Kirim</button><button class="btn small ghost" type="button" id="btnChallenge">Tantangan baru dari AI</button></div>
+      </form>
+      <details>
+        <summary>Sambungkan GenAI (Google Apps Script)</summary>
+        <p class="note">Tempel alamat aplikasi web Apps Script (berakhiran /exec). Kunci API tetap tersimpan di server Apps Script, bukan di halaman ini.</p>
+        <label for="aiUrl" class="note">Alamat endpoint</label>
+        <input type="url" id="aiUrl" placeholder="https://script.google.com/macros/s/.../exec">
+        <div class="row-actions"><button class="btn small" id="aiSave" type="button">Simpan</button><button class="btn small ghost" id="aiClear" type="button">Hapus</button></div>
+      </details>
+    </section>
+  </aside>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <dialog id="about">
+    <h2>Tentang Pinisi</h2>
+    <ul>
+      <li>Pinisi adalah perahu layar kayu tradisi Bugis-Makassar. Pusat pembuatannya antara lain Tana Beru, Bira, dan Ara di Bulukumba, Sulawesi Selatan.</li>
+      <li>UNESCO mencatat seni pembuatan perahu Pinisi sebagai Warisan Budaya Takbenda pada 2017.</li>
+      <li>Rig Pinisi umumnya digambarkan bertiang dua dengan tujuh layar. Model 3D di sini mengikuti gambaran itu.</li>
+      <li>Sulapa eppa (segi empat) adalah pandangan dunia Bugis tentang empat unsur: angin, air, api, tanah. Dalam media ini keempat unsur dipetakan secara metaforis ke empat misi.</li>
+      <li>Annyorong lopi adalah tradisi meluncurkan perahu ke laut. Misi 2 meminjam gagasan ini untuk belajar translasi.</li>
+    </ul>
+    <p class="note">Rancangan media: Muhammad Rijal, PNUP. Model 3D dibuat prosedural dari kode, tanpa berkas aset luar.</p>
+    <form method="dialog"><button class="btn small">Tutup</button></form>
+  </dialog>
+</div>
+
+<script>
+/* ================= Komponen A-Frame ================= */
+AFRAME.registerComponent('orbit-rig', {
+  init: function () {
+    const THREE = AFRAME.THREE, el = this.el, sc = el.sceneEl;
+    this.THREE = THREE; this.enabled = true;
+    this.yaw = 0.62; this.pitch = 0.42; this.dist = 15; this.t = new THREE.Vector3(1, 0.8, -0.5);
+    this.ptrs = new Map(); this.pinch = 0;
+    const bind = () => {
+      const c = sc.canvas; if (!c) return;
+      c.style.touchAction = 'none';
+      c.addEventListener('pointerdown', e => { if (!this.enabled) return; try { c.setPointerCapture(e.pointerId); } catch (_) {} this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (this.ptrs.size === 2) this.pinch = this.pd(); });
+      c.addEventListener('pointermove', e => {
+        const p = this.ptrs.get(e.pointerId); if (!p || !this.enabled) return;
+        const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+        if (this.ptrs.size === 1) { this.yaw -= dx * 0.006; this.pitch = Math.min(1.45, Math.max(0.05, this.pitch + dy * 0.005)); }
+        else if (this.ptrs.size === 2) { const d = this.pd(); if (d > 0 && this.pinch > 0) this.dist = Math.min(36, Math.max(5, this.dist * this.pinch / d)); this.pinch = d; }
+        this.apply();
+      });
+      const up = e => this.ptrs.delete(e.pointerId);
+      c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+      c.addEventListener('wheel', e => { if (!this.enabled) return; e.preventDefault(); this.dist = Math.min(36, Math.max(5, this.dist * (1 + e.deltaY * 0.001))); this.apply(); }, { passive: false });
+    };
+    if (sc.hasLoaded) bind(); else sc.addEventListener('loaded', bind);
+    this.apply();
+  },
+  pd: function () { const a = [...this.ptrs.values()]; return Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); },
+  apply: function () {
+    if (!this.enabled) return;
+    const r = this.dist * Math.cos(this.pitch);
+    const pos = new this.THREE.Vector3(this.t.x + r * Math.sin(this.yaw), this.t.y + this.dist * Math.sin(this.pitch), this.t.z + r * Math.cos(this.yaw));
+    const o = this.el.object3D; o.position.copy(pos);
+    o.lookAt(pos.clone().multiplyScalar(2).sub(this.t));   /* entitas non-kamera: +Z menghadap titik yang dituju */
+  },
+  reset: function () { this.yaw = 0.62; this.pitch = 0.42; this.dist = 15; this.apply(); }
+});
+
+AFRAME.registerComponent('waves', {
+  init: function () {
+    const THREE = AFRAME.THREE;
+    const g = new THREE.PlaneGeometry(24, 24, 48, 48); g.rotateX(-Math.PI / 2);
+    this.base = Float32Array.from(g.attributes.position.array);
+    const m = new THREE.MeshStandardMaterial({ color: 0x2a8f9a, roughness: .35, metalness: .1, flatShading: true, transparent: true, opacity: .94 });
+    this.mesh = new THREE.Mesh(g, m); this.mesh.position.y = -0.3;
+    this.el.object3D.add(this.mesh); this.n = 0;
+  },
+  tick: function (t) {
+    if (++this.n % 2) return;
+    const p = this.mesh.geometry.attributes.position, b = this.base, s = t / 1000;
+    for (let i = 0; i < p.count; i++) {
+      const x = b[i * 3], z = b[i * 3 + 2];
+      p.array[i * 3 + 1] = Math.sin(x * .55 + s * 1.2) * .07 + Math.cos(z * .42 + s * .9) * .06;
+    }
+    p.needsUpdate = true;
+  }
+});
+
+/* ================= Model 3D Pinisi (prosedural) ================= */
+function buildPinisi(THREE, ghost) {
+  const g = new THREE.Group();
+  const L = 7, N = 40, M = 14, BEAM = 1.25, DEPTH = 1.05;
+  const sheer = t => 0.55 + 0.55 * Math.pow(Math.max(0, (0.3 - t) / 0.3), 1.5) + 0.5 * Math.pow(Math.max(0, (t - 0.7) / 0.3), 2);
+  const halfBeam = t => { const u = 2 * t - 1; let b = BEAM * Math.pow(1 - Math.pow(Math.abs(u), 2.2), 0.6); if (u < 0) b = Math.max(b, BEAM * 0.34 * (1 + u * 0.2)); return b; };
+  const depth = t => { const u = 2 * t - 1, k = Math.pow(1 - Math.pow(Math.abs(u), 3), 0.7); return u < 0 ? DEPTH * (0.35 + 0.65 * k) : DEPTH * k; };
+
+  const cv = document.createElement('canvas'); cv.width = 32; cv.height = 256;
+  const cx = cv.getContext('2d');
+  for (let i = 0; i < 16; i++) { cx.fillStyle = 'hsl(24,46%,' + (34 + ((i * 37) % 11)) + '%)'; cx.fillRect(0, i * 16, 32, 16); cx.fillStyle = 'rgba(25,12,5,.6)'; cx.fillRect(0, i * 16, 32, 1.6); }
+  const tex = new THREE.CanvasTexture(cv); if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+  const hullMat = new THREE.MeshStandardMaterial({ map: tex, roughness: .8, side: THREE.DoubleSide });
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x8b6240, roughness: .85, side: THREE.DoubleSide });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x3d2515, roughness: .8 });
+  const redMat = new THREE.MeshStandardMaterial({ color: 0xb23a2a, roughness: .7 });
+  const sailMat = new THREE.MeshStandardMaterial({ color: 0xefe5cf, roughness: .95, emissive: 0x2a2418, side: THREE.DoubleSide });
+  const winMat = new THREE.MeshStandardMaterial({ color: 0xffd27a, emissive: 0xffb84a, emissiveIntensity: .8 });
+
+  /* lambung: loft penampang melintang */
+  const pos = [], uv = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, x = (t - 0.5) * L, h = sheer(t), b = halfBeam(t), d = depth(t);
+    for (let j = 0; j <= M; j++) { const s = -1 + 2 * j / M; pos.push(x, h - d * (1 - s * s), b * s); uv.push(t, j / M); }
+  }
+  for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) { const a = i * (M + 1) + j, b = a + 1, c = a + M + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const cIdx = pos.length / 3; let ax = 0, ay = 0, az = 0;
+  for (let j = 0; j <= M; j++) { ax += pos[j * 3]; ay += pos[j * 3 + 1]; az += pos[j * 3 + 2]; }
+  pos.push(ax / (M + 1), ay / (M + 1), az / (M + 1)); uv.push(0, .5);
+  for (let j = 0; j < M; j++) idx.push(cIdx, j, j + 1);
+  const hg = new THREE.BufferGeometry();
+  hg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  hg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  hg.setIndex(idx); hg.computeVertexNormals();
+  g.add(new THREE.Mesh(hg, hullMat));
+
+  /* geladak */
+  const dp = [], di = [];
+  for (let i = 0; i <= N; i++) { const t = i / N, x = (t - 0.5) * L, h = sheer(t) + 0.01, b = halfBeam(t); dp.push(x, h, -b, x, h, b); }
+  for (let i = 0; i < N; i++) { const a = i * 2; di.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.Float32BufferAttribute(dp, 3)); dg.setIndex(di); dg.computeVertexNormals();
+  g.add(new THREE.Mesh(dg, woodMat));
+
+  /* pagar lambung */
+  [-1, 1].forEach(sd => {
+    const pts = []; for (let i = 0; i <= N; i += 2) { const t = i / N; pts.push(new THREE.Vector3((t - 0.5) * L, sheer(t) + 0.03, sd * halfBeam(t))); }
+    g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 0.045, 6), darkMat));
+  });
+
+  /* rumah geladak di buritan */
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.75, 1.45), woodMat); cab.position.set(-2.55, 1.28, 0); g.add(cab);
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.1, 1.7), redMat); roof.position.set(-2.55, 1.7, 0); g.add(roof);
+  [-0.45, 0.45].forEach(zz => { [-0.45, 0.45].forEach(xx => { const w = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.24, 0.02), winMat); w.position.set(-2.55 + xx, 1.35, zz > 0 ? 0.735 : -0.735); g.add(w); }); });
+
+  /* tiang, bom, bowsprit */
+  const mast = (x, h) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.085, h, 10), darkMat); m.position.set(x, 0.6 + h / 2, 0); g.add(m); };
+  mast(-0.55, 5.2); mast(1.6, 4.7);
+  const bsAng = 0.28, bsLen = 2.2, bs = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, bsLen, 8), darkMat);
+  bs.rotation.z = -(Math.PI / 2 - bsAng); bs.position.set(3.3 + Math.cos(bsAng) * bsLen / 2, 1.05 + Math.sin(bsAng) * bsLen / 2, 0); g.add(bs);
+  const boom = (x0, x1, y) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, Math.abs(x1 - x0), 6), darkMat); b.rotation.z = Math.PI / 2; b.position.set((x0 + x1) / 2, y, 0); g.add(b); };
+  boom(-0.55, -2.9, 1.5); boom(1.6, 0.05, 1.45);
+
+  /* tujuh layar */
+  const sail = (p0, p1, p2, p3, bulge) => {
+    const n = 8, sp = [], si = [];
+    for (let i = 0; i <= n; i++) { const u = i / n; for (let j = 0; j <= n; j++) { const v = j / n;
+      sp.push((1 - u) * (1 - v) * p0[0] + u * (1 - v) * p1[0] + u * v * p2[0] + (1 - u) * v * p3[0],
+              (1 - u) * (1 - v) * p0[1] + u * (1 - v) * p1[1] + u * v * p2[1] + (1 - u) * v * p3[1],
+              bulge * Math.sin(Math.PI * u) * Math.sin(Math.PI * v)); } }
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const a = i * (n + 1) + j, b = a + 1, c = a + n + 1, d = c + 1; si.push(a, c, b, b, c, d); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); sg.setIndex(si); sg.computeVertexNormals();
+    g.add(new THREE.Mesh(sg, sailMat));
+  };
+  sail([-0.6, 1.5], [-2.9, 1.5], [-2.4, 3.3], [-0.6, 3.5], 0.35);   /* layar utama bawah */
+  sail([-0.6, 3.6], [-2.3, 3.5], [-1.8, 5.0], [-0.6, 5.4], 0.3);     /* layar utama atas */
+  sail([1.55, 1.45], [0.05, 1.45], [0.25, 3.0], [1.55, 3.2], -0.32); /* layar depan bawah */
+  sail([1.55, 3.3], [0.35, 3.2], [0.6, 4.4], [1.55, 4.7], -0.28);    /* layar depan atas */
+  sail([5.3, 1.72], [2.7, 1.75], [1.65, 4.55], [1.65, 4.55], 0.25);  /* tiga layar cucur */
+  sail([4.4, 1.45], [2.3, 1.7], [1.65, 4.1], [1.65, 4.1], 0.22);
+  sail([3.5, 1.15], [2.1, 1.6], [1.65, 3.6], [1.65, 3.6], 0.2);
+
+  if (!ghost) {
+    const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.28), new THREE.MeshStandardMaterial({ color: 0xc8432f, side: THREE.DoubleSide }));
+    fl.position.set(1.95, 5.15, 0); g.add(fl);
+  }
+  if (ghost) {
+    const gm = new THREE.MeshBasicMaterial({ color: 0xe3a72f, wireframe: true, transparent: true, opacity: .55, depthWrite: false });
+    g.traverse(o => { if (o.isMesh) o.material = gm; });
+  }
+  return g;
+}
+
+/* ================= Aplikasi ================= */
+const $ = s => document.querySelector(s);
+const sceneEl = $('#scene');
+function startApp() {
+  const THREE = AFRAME.THREE, V3 = THREE.Vector3, Q = THREE.Quaternion;
+  const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+  const fmt = n => (Math.abs(n) < 0.005 ? 0 : n).toFixed(2);
+  const angDiff = (a, b) => ((a - b + 540) % 360 + 360) % 360 - 180;
+
+  const rig = $('#rig'), orbit = rig.components['orbit-rig'];
+  const stage = $('#stage'), anchor = $('#anchor'), boatEl = $('#boat'), ghostEl = $('#ghost'), markerEl = $('#marker'), seaEl = $('#sea'), vrPanel = $('#vrPanel');
+  seaEl.setAttribute('waves', '');
+
+  /* lingkungan */
+  const env = new THREE.Group(); stage.object3D.add(env);
+  const farSea = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x0f4c5c, roughness: .6 }));
+  farSea.position.y = -0.34; env.add(farSea);
+  const island = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 5.2, 0.7, 40), new THREE.MeshStandardMaterial({ color: 0xd9b979, roughness: 1 }));
+  island.position.set(0, -0.42, 0); stage.object3D.add(island);
+  const grid = new THREE.GridHelper(24, 24, 0xe3a72f, 0x6b8aa3); grid.position.y = -0.27; grid.material.transparent = true; grid.material.opacity = .22; stage.object3D.add(grid);
+  const worldAxes = new THREE.AxesHelper(5); worldAxes.position.y = -0.2; stage.object3D.add(worldAxes);
+
+  const gc = document.createElement('canvas'); gc.width = 4; gc.height = 256; const gx = gc.getContext('2d');
+  const gr = gx.createLinearGradient(0, 0, 0, 256);
+  [[0, '#0b1830'], [.34, '#2a4c72'], [.48, '#f0a950'], [.52, '#e07b3c'], [.58, '#1b4455'], [1, '#0a2733']].forEach(s => gr.addColorStop(s[0], s[1]));
+  gx.fillStyle = gr; gx.fillRect(0, 0, 4, 256);
+  const skyTex = new THREE.CanvasTexture(gc); skyTex.mapping = THREE.EquirectangularReflectionMapping; if (THREE.SRGBColorSpace) skyTex.colorSpace = THREE.SRGBColorSpace;
+  sceneEl.object3D.background = skyTex;
+
+  /* lopi, bayangan target, penanda */
+  const axesLocal = new THREE.AxesHelper(3.2); axesLocal.position.y = 0.2;
+  const bob = new THREE.Group(); boatEl.object3D.add(bob); bob.add(buildPinisi(THREE, false)); boatEl.object3D.add(axesLocal);
+  ghostEl.object3D.add(buildPinisi(THREE, true));
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.25, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xe3a72f, transparent: true, opacity: .9, side: THREE.DoubleSide }));
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 5, 8), new THREE.MeshBasicMaterial({ color: 0xe3a72f, transparent: true, opacity: .35 })); beam.position.y = 2.4;
+  markerEl.object3D.add(ring); markerEl.object3D.add(beam); markerEl.object3D.visible = false;
+  sceneEl.addEventListener('renderstart', () => {});
+  const clock = new THREE.Clock();
+  AFRAME.registerComponent('bobber', { tick: function (t) { const s = t / 1000; bob.position.y = Math.sin(s * 1.3) * 0.045; bob.rotation.z = Math.sin(s * 0.9) * 0.012; bob.rotation.x = Math.cos(s * 1.1) * 0.01; ring.material.opacity = .55 + .35 * Math.sin(s * 3); } });
+  sceneEl.setAttribute('bobber', '');
+
+  /* ---------- state & transformasi ---------- */
+  const DEF = { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0, s: 1, order: 'TRS' };
+  const S = Object.assign({}, DEF);
+  const CONTROLS = [
+    { k: 'tx', label: 'Geser X', min: -10, max: 10, step: .1, u: '' }, { k: 'ty', label: 'Geser Y', min: -1, max: 4, step: .1, u: '' }, { k: 'tz', label: 'Geser Z', min: -10, max: 10, step: .1, u: '' },
+    { k: 'rx', label: 'Putar X', min: -180, max: 180, step: 1, u: '°' }, { k: 'ry', label: 'Putar Y', min: -180, max: 180, step: 1, u: '°' }, { k: 'rz', label: 'Putar Z', min: -180, max: 180, step: 1, u: '°' },
+    { k: 's', label: 'Skala', min: .2, max: 2.5, step: .05, u: '×' }
+  ];
+  function matrixOf(st) {
+    const T = new THREE.Matrix4().makeTranslation(st.tx, st.ty, st.tz);
+    const R = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rad(st.rx), rad(st.ry), rad(st.rz), 'ZYX'));
+    const Sc = new THREE.Matrix4().makeScale(st.s, st.s, st.s);
+    const m = new THREE.Matrix4();
+    if (st.order === 'RTS') m.multiplyMatrices(R, T).multiply(Sc); else m.multiplyMatrices(T, R).multiply(Sc);
+    return m;
+  }
+  function poseDelta(M, Mt) {
+    const p = new V3(), q = new Q(), s = new V3(), p2 = new V3(), q2 = new Q(), s2 = new V3();
+    M.decompose(p, q, s); Mt.decompose(p2, q2, s2);
+    return { dp: p.distanceTo(p2), da: deg(q.angleTo(q2)), ds: Math.abs(s.x - s2.x) };
+  }
+  function applyMatrix(obj, m) { const p = new V3(), q = new Q(), s = new V3(); m.decompose(p, q, s); obj.position.copy(p); obj.quaternion.copy(q); obj.scale.copy(s); }
+
+  /* ---------- misi ---------- */
+  const MISSIONS = [
+    { id: 0, short: 'Jelajah', title: 'Jelajah bebas', el: 'Pemanasan', concept: 'Semua transformasi',
+      story: 'Geser, putar, dan besarkan lopi. Perhatikan tiga garis berwarna yang menempel di lambung: itu sumbu lokal lopi. Merah = X, hijau = Y, biru = Z.',
+      goal: 'Tidak ada target. Amati bagaimana angka di tab Matriks berubah setiap kali kamu menggeser sebuah kontrol.', locked: [], start: {}, target: null },
+    { id: 1, short: 'Angin', title: 'Memutar haluan', el: 'Anging · angin', concept: 'Rotasi',
+      story: 'Sebelum annyorong lopi, juru mudi memastikan haluan menghadap arah angin yang akan mengisi layar. Bayangan emas menunjukkan arah yang benar.',
+      goal: 'Putar lopi pada sumbu Y sampai haluannya sejajar bayangan emas.', locked: ['tx', 'ty', 'tz', 'rx', 'rz', 's'], start: {}, target: { ry: 65 }, kind: 'rot', tol: 6 },
+    { id: 2, short: 'Air', title: 'Dari galangan ke laut', el: 'Tana ke Uwae · tanah ke air', concept: 'Translasi',
+      story: 'Lopi selesai dibangun di galangan di darat. Tradisi annyorong lopi meluncurkannya ke laut. Cincin emas menandai titik labuh.',
+      goal: 'Geser lopi pada bidang laut (X dan Z) sampai lambungnya berada di dalam cincin emas.', locked: ['ty', 'rx', 'ry', 'rz', 's'], start: {}, target: { tx: 6, tz: -4 }, kind: 'pos', tol: 0.4, ring: true },
+    { id: 3, short: 'Api', title: 'Dari maket ke kapal', el: 'Api · tungku', concept: 'Skala',
+      story: 'Pembuat perahu memahami proporsi dari bentuk yang lebih kecil sebelum menggarap lambung penuh. Di sini maket diperbesar sampai ukurannya sama dengan bayangan emas.',
+      goal: 'Atur skala seragam sampai lopi pas dengan bayangan emas.', locked: ['tx', 'ty', 'tz', 'rx', 'ry', 'rz'], start: { s: 0.4 }, target: { s: 1.2 }, kind: 'scale', tol: 0.07 },
+    { id: 4, short: 'Tanah', title: 'Sulapa eppa: gabungan', el: 'Sulapa eppa · kesatuan', concept: 'Komposisi T · R · S',
+      story: 'Keempat unsur menyatu saat lopi berlayar: geser, putar, dan ukuran bekerja bersama. Kali ini urutan penerapan ikut menentukan hasil.',
+      goal: 'Tempatkan lopi persis pada bayangan emas: geser ke (4, 0, −3), putar 90° pada Y, skala 1,2. Pakai urutan mana pun, asal hasil akhirnya cocok.', locked: ['ty', 'rx', 'rz'], start: {}, target: { tx: 4, tz: -3, ry: 90, s: 1.2 }, kind: 'pose', tol: [0.45, 7, 0.08], free: true,
+      quiz: { q: 'Prediksi dulu. Jika angka tetap sama tetapi urutan diubah dari T · R · S menjadi R · T · S, apa yang terjadi pada lopi?',
+        opts: ['Posisi akhirnya sama persis.', 'Lopi bergeser dan berputar mengelilingi titik asal dunia, jadi posisi akhirnya berbeda.', 'Hanya ukuran lopi yang berubah.'], ok: 1,
+        why: 'Benar. Pada R · T · S, geseran dikenakan lebih dulu lalu seluruh posisi diputar, sehingga lopi mengorbit titik asal. Buktikan sendiri dengan menekan tombol urutan di bawah.' } },
+    { id: 5, short: 'AI ★', title: 'Tantangan dari Daeng', el: 'Dibuat oleh GenAI', concept: 'Semua transformasi',
+      story: 'Belum ada tantangan. Buka tab Daeng AI lalu tekan "Tantangan baru dari AI".', goal: '', locked: [], start: {}, target: null, kind: 'pose', tol: [0.45, 7, 0.08], free: true, dynamic: true }
+  ];
+  const done = new Set(); try { JSON.parse(localStorage.getItem('lopi-done') || '[]').forEach(x => done.add(x)); } catch (_) {}
+  let cur = 0, quizPick = null, reflectDone = false, lastOk = false, aiChallenge = null;
+
+  function missionTarget(m) { return m.target ? Object.assign({}, DEF, m.target) : null; }
+  function evalMission(m) {
+    const t = missionTarget(m); if (!t) return { ok: false, text: 'Tidak ada target pada misi ini.' };
+    const d = poseDelta(matrixOf(S), matrixOf(t));
+    if (m.kind === 'rot') return { ok: d.da <= m.tol, text: 'Selisih sudut haluan: ' + d.da.toFixed(1) + '° (batas ' + m.tol + '°)' };
+    if (m.kind === 'pos') return { ok: d.dp <= m.tol, text: 'Jarak ke titik labuh: ' + d.dp.toFixed(2) + ' satuan (batas ' + m.tol + ')' };
+    if (m.kind === 'scale') return { ok: d.ds <= m.tol, text: 'Selisih skala: ' + d.ds.toFixed(2) + ' (batas ' + m.tol + ')' };
+    const ok = d.dp <= m.tol[0] && d.da <= m.tol[1] && d.ds <= m.tol[2];
+    return { ok, text: 'Posisi ' + d.dp.toFixed(2) + ' · sudut ' + d.da.toFixed(1) + '° · skala ' + d.ds.toFixed(2) };
+  }
+  function offlineHint(m) {
+    const t = missionTarget(m); if (!t) return 'Misi ini bebas. Coba geser sebuah kontrol lalu lihat kolom ke-4 matriks berubah.';
+    if (m.kind === 'rot') { const df = angDiff(S.ry, t.ry); return Math.abs(df) <= m.tol ? 'Iye, haluan sudah searah angin. Tekan Periksa.' : 'Iye, haluanmu masih melenceng sekitar ' + Math.abs(df).toFixed(0) + '°. Coba ' + (df > 0 ? 'kurangi' : 'tambah') + ' sudut Y. Perhatikan sumbu hijau di lambung: itulah poros putarnya.'; }
+    if (m.kind === 'pos') { const dx = t.tx - S.tx, dz = t.tz - S.tz; return 'Iye, lopi perlu bergerak ' + (Math.abs(dx) < .2 ? 'sedikit saja' : (dx > 0 ? 'menambah' : 'mengurangi') + ' X') + ' dan ' + (Math.abs(dz) < .2 ? 'sedikit saja' : (dz > 0 ? 'menambah' : 'mengurangi') + ' Z') + '. Sumbu merah di dunia mengarah ke kanan, sumbu biru ke arahmu.'; }
+    if (m.kind === 'scale') return S.s < t.s - m.tol ? 'Iye, maketmu masih terlalu kecil. Besarkan skala. Skala seragam mengalikan semua titik dengan faktor yang sama.' : S.s > t.s + m.tol ? 'Terlalu besar. Kecilkan sedikit skalanya.' : 'Sudah pas. Tekan Periksa.';
+    if (S.order === 'RTS') return 'Iye, kamu memakai urutan R · T · S. Di sini geseran terjadi sebelum putaran, jadi lopi berputar mengelilingi titik asal dunia. Coba kembali ke T · R · S dan bandingkan.';
+    return 'Iye, mulai dari kontrol yang berkaitan dengan bayangan emas: geser dulu ke posisinya, lalu putar pada sumbu Y, lalu atur skala. Cek angka Matriks setelah tiap langkah.';
+  }
+
+  /* ---------- tampilan ---------- */
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3600); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+  function renderProgress() {
+    const names = ['Anging', 'Uwae', 'Api', 'Tana'];
+    $('#progress').innerHTML = names.map((n, i) => '<svg viewBox="0 0 26 26" class="' + (done.has(i + 1) ? 'on' : '') + '"><title>' + n + (done.has(i + 1) ? ' selesai' : '') + '</title><path class="d" d="M13 2 24 13 13 24 2 13Z"/></svg>').join('');
+    $('#progress').setAttribute('aria-label', 'Misi selesai: ' + [...done].filter(x => x >= 1 && x <= 4).length + ' dari 4');
+  }
+  function renderNav() {
+    $('#missionNav').innerHTML = MISSIONS.map((m, i) => '<button data-i="' + i + '"' + (i === cur ? ' aria-current="true"' : '') + (done.has(i) ? ' class="done"' : '') + '>' + m.short + '</button>').join('');
+    $('#missionNav').querySelectorAll('button').forEach(b => b.onclick = () => setMission(+b.dataset.i));
+  }
+  function renderCard() {
+    const m = MISSIONS[cur]; const ev = m.target ? evalMission(m) : null;
+    let h = '<p class="eyebrow">' + esc(m.el) + (m.concept ? ' · ' + esc(m.concept) : '') + '</p><h2>' + esc(m.title) + '</h2><p class="story">' + esc(m.story) + '</p>';
+    if (m.goal) h += '<p class="goal"><b>Tujuan.</b> ' + esc(m.goal) + '</p>';
+    if (m.quiz) {
+      h += '<div class="quiz"><b>' + esc(m.quiz.q) + '</b>' + m.quiz.opts.map((o, i) => '<button data-q="' + i + '" class="' + (quizPick === null ? '' : i === m.quiz.ok ? 'good' : i === quizPick ? 'bad' : '') + '">' + esc(o) + '</button>').join('') + (quizPick !== null ? '<p class="note" style="margin:8px 0 0">' + (quizPick === m.quiz.ok ? esc(m.quiz.why) : 'Belum tepat. Coba pikirkan matriks mana yang dikenakan lebih dulu pada titik, lalu uji dengan tombol urutan di bawah.') + '</p>' : '') + '</div>';
+    }
+    if (m.target) h += '<div class="status' + (ev.ok ? ' ok' : '') + '" id="statusBox">' + esc(ev.text) + (ev.ok ? ' ✓' : '') + '</div>';
+    h += '<div class="row-actions">' + (m.target ? '<button class="btn small" id="btnCheck">Periksa</button><button class="btn small ghost" id="btnHint">Petunjuk</button>' : '') + '<button class="btn small ghost" id="btnReset">Ulang dari awal</button>' + (done.has(cur) && cur < MISSIONS.length - 1 ? '<button class="btn small" id="btnNext">Misi berikutnya</button>' : '') + '</div>';
+    if (cur === 4 && done.has(4)) {
+      h += '<div class="quiz"><b>Refleksi (sintesis).</b> Jelaskan dengan kata-katamu mengapa T · R dan R · T menghasilkan posisi akhir yang berbeda.<textarea id="reflectIn" rows="3" aria-label="Jawaban refleksi"></textarea><div class="row-actions"><button class="btn small" id="btnReflect">Kirim ke Daeng</button></div><div id="reflectOut" class="note" style="white-space:pre-wrap"></div></div>';
+    }
+    $('#missionCard').innerHTML = h;
+    $('#missionCard').querySelectorAll('[data-q]').forEach(b => b.onclick = () => { quizPick = +b.dataset.q; Snd.chime(quizPick === m.quiz.ok); renderCard(); });
+    const g = id => document.getElementById(id);
+    if (g('btnCheck')) g('btnCheck').onclick = () => { const e = evalMission(m); toast(e.ok ? 'Tepat. ' + e.text : 'Belum pas. ' + e.text); if (e.ok) completeMission(); };
+    if (g('btnHint')) g('btnHint').onclick = () => { showTab('AI'); sendChat('Beri aku petunjuk untuk misi ini tanpa langsung memberi angka jawabannya.'); };
+    if (g('btnReset')) g('btnReset').onclick = () => setMission(cur);
+    if (g('btnNext')) g('btnNext').onclick = () => setMission(cur + 1);
+    if (g('btnReflect')) g('btnReflect').onclick = reflect;
+  }
+  function updateStatusOnly() {
+    const m = MISSIONS[cur]; if (!m.target) return;
+    const ev = evalMission(m), box = document.getElementById('statusBox');
+    if (box) { box.textContent = ev.text + (ev.ok ? ' ✓' : ''); box.classList.toggle('ok', ev.ok); }
+    if (ev.ok && !lastOk) completeMission();
+    lastOk = ev.ok;
+  }
+  function completeMission() {
+    if (done.has(cur)) return;
+    done.add(cur); try { localStorage.setItem('lopi-done', JSON.stringify([...done])); } catch (_) {}
+    Snd.chime(true); toast('Misi selesai: ' + MISSIONS[cur].title + '. ' + (cur >= 1 && cur <= 4 ? 'Satu unsur sulapa eppa terisi.' : ''));
+    renderProgress(); renderNav(); renderCard(); vrRefresh();
+  }
+
+  /* kontrol */
+  function buildSliders() {
+    $('#sliders').innerHTML = CONTROLS.map(c => '<div class="ctl" id="row-' + c.k + '"><label for="in-' + c.k + '">' + c.label + '</label><input type="range" id="in-' + c.k + '" min="' + c.min + '" max="' + c.max + '" step="' + c.step + '" value="' + S[c.k] + '"><output id="out-' + c.k + '" for="in-' + c.k + '"></output></div>').join('');
+    CONTROLS.forEach(c => { $('#in-' + c.k).addEventListener('input', e => { S[c.k] = parseFloat(e.target.value); refresh(); }); });
+  }
+  function syncControls() {
+    const m = MISSIONS[cur];
+    CONTROLS.forEach(c => { const i = $('#in-' + c.k), lock = m.locked.includes(c.k); i.value = S[c.k]; i.disabled = lock; $('#row-' + c.k).classList.toggle('locked', lock); $('#out-' + c.k).textContent = (c.k === 's' ? S[c.k].toFixed(2) : c.step < 1 ? S[c.k].toFixed(1) : Math.round(S[c.k])) + c.u; });
+    const free = !m.locked.length || m.free;
+    $('#ordTRS').disabled = !free; $('#ordRTS').disabled = !free;
+    $('#ordTRS').setAttribute('aria-pressed', S.order === 'TRS'); $('#ordRTS').setAttribute('aria-pressed', S.order === 'RTS');
+    $('#orderNote').textContent = free ? (S.order === 'TRS' ? 'Skala, lalu putar pada poros sendiri, lalu geser.' : 'Skala, lalu geser, lalu putar mengelilingi titik asal dunia.') : 'Urutan dikunci pada misi ini.';
+  }
+  function renderMatrix(M) {
+    const e = M.elements; let h = '';
+    for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { const v = e[c * 4 + r]; h += '<span class="' + (r < 3 && c < 3 ? 'r' : r < 3 ? 't' : 'h') + '">' + fmt(v) + '</span>'; }
+    $('#matGrid').innerHTML = h;
+    $('#formula').textContent = S.order === 'TRS' ? 'M = T(' + fmt(S.tx) + ', ' + fmt(S.ty) + ', ' + fmt(S.tz) + ') · R(' + Math.round(S.rx) + '°, ' + Math.round(S.ry) + '°, ' + Math.round(S.rz) + '°) · S(' + fmt(S.s) + ')' : 'M = R(' + Math.round(S.rx) + '°, ' + Math.round(S.ry) + '°, ' + Math.round(S.rz) + '°) · T(' + fmt(S.tx) + ', ' + fmt(S.ty) + ', ' + fmt(S.tz) + ') · S(' + fmt(S.s) + ')';
+    const p = new V3(3.5, 1.05, 0), w = p.clone().applyMatrix4(M);
+    $('#pointCalc').innerHTML = 'p = (3.50, 1.05, 0.00)<br>p\' = M · p = (' + fmt(w.x) + ', ' + fmt(w.y) + ', ' + fmt(w.z) + ')';
+  }
+  function refresh() {
+    const M = matrixOf(S); applyMatrix(boatEl.object3D, M);
+    syncControls(); renderMatrix(M); updateStatusOnly(); vrRefresh();
+  }
+  $('#ordTRS').onclick = () => { S.order = 'TRS'; refresh(); };
+  $('#ordRTS').onclick = () => { S.order = 'RTS'; refresh(); };
+
+  function setMission(i) {
+    cur = Math.max(0, Math.min(MISSIONS.length - 1, i)); const m = MISSIONS[cur];
+    Object.assign(S, DEF, m.start); quizPick = null; lastOk = false;
+    const t = missionTarget(m);
+    ghostEl.object3D.visible = !!t; if (t) applyMatrix(ghostEl.object3D, matrixOf(t));
+    markerEl.object3D.visible = !!(t && m.ring); if (t && m.ring) markerEl.object3D.position.set(t.tx, -0.2, t.tz);
+    renderNav(); renderCard(); refresh();
+  }
+  CONTROLS.forEach(() => {});
+
+  /* ---------- tab ---------- */
+  function showTab(n) {
+    [['Misi', '#paneMisi', '#tabMisi'], ['Mat', '#paneMat', '#tabMat'], ['AI', '#paneAI', '#tabAI']].forEach(a => { const on = a[0] === n; $(a[1]).hidden = !on; $(a[2]).setAttribute('aria-selected', on); });
+    $('#panel').classList.remove('folded'); $('#btnFold').textContent = '–'; $('#btnFold').setAttribute('aria-expanded', 'true');
+  }
+  $('#tabMisi').onclick = () => showTab('Misi'); $('#tabMat').onclick = () => showTab('Mat'); $('#tabAI').onclick = () => showTab('AI');
+  $('#btnFold').onclick = () => { const f = $('#panel').classList.toggle('folded'); $('#btnFold').textContent = f ? '+' : '–'; $('#btnFold').setAttribute('aria-expanded', !f); };
+  $('#btnInfo').onclick = () => $('#about').showModal();
+  $('#btnCam').onclick = () => orbit.reset();
+
+  /* ---------- suara (WebAudio, tanpa berkas) ---------- */
+  const Snd = {
+    ctx: null, on: false,
+    start() {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
+      if (!this.ctx) {
+        const c = this.ctx = new AC(), len = c.sampleRate * 2, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0); let last = 0;
+        for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+        const src = c.createBufferSource(); src.buffer = buf; src.loop = true;
+        const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+        this.master = c.createGain(); this.master.gain.value = 0.0;
+        const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 0.12; lg.gain.value = 0.25; const wg = c.createGain(); wg.gain.value = 0.55;
+        lfo.connect(lg); lg.connect(wg.gain); src.connect(lp); lp.connect(wg); wg.connect(this.master); this.master.connect(c.destination); src.start(); lfo.start();
+        const w2 = c.createBufferSource(); w2.buffer = buf; w2.loop = true; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = 0.6; const g2 = c.createGain(); g2.gain.value = 0.05;
+        w2.connect(bp); bp.connect(g2); g2.connect(this.master); w2.start();
+      }
+      this.ctx.resume(); this.master.gain.setTargetAtTime(0.5, this.ctx.currentTime, 0.4); return true;
+    },
+    stop() { if (this.ctx) this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2); },
+    chime(good) {
+      if (!this.ctx || !this.on) return; const c = this.ctx, notes = good ? [523.25, 659.25, 783.99] : [330, 262];
+      notes.forEach((f, i) => { const o = c.createOscillator(), g = c.createGain(), t0 = c.currentTime + i * 0.12; o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(0.18, t0 + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5); o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + 0.55); });
+    }
+  };
+  $('#btnSound').onclick = () => { Snd.on = !Snd.on; if (Snd.on) { if (!Snd.start()) { Snd.on = false; toast('Peramban ini tidak mendukung audio.'); } } else Snd.stop(); $('#btnSound').textContent = 'Suara: ' + (Snd.on ? 'nyala' : 'mati'); $('#btnSound').setAttribute('aria-pressed', Snd.on); };
+
+  /* ---------- GenAI (Daeng Pinisi) ---------- */
+  const AI_ENDPOINT = '';   /* isi dengan URL /exec Apps Script, atau tempel lewat panel Daeng AI */
+  const aiURL = () => { try { return localStorage.getItem('lopi-ai') || AI_ENDPOINT; } catch (_) { return AI_ENDPOINT; } };
+  const history = [];
+  function pill() { const on = !!aiURL(); $('#aiPill').textContent = on ? 'GenAI aktif' : 'Mode luring'; $('#aiPill').className = 'pill ' + (on ? 'live' : 'off'); }
+  function addMsg(who, text) { const d = document.createElement('div'); d.className = 'msg ' + who; d.textContent = text; $('#chat').appendChild(d); $('#chat').scrollTop = 1e6; return d; }
+  function context() {
+    const m = MISSIONS[cur], M = matrixOf(S).elements; const rows = [0, 1, 2, 3].map(r => [0, 1, 2, 3].map(c => +fmt(M[c * 4 + r])));
+    return { misi: { id: m.id, judul: m.title, konsep: m.concept, tujuan: m.goal }, state: Object.assign({}, S), matriks: rows, target: m.target ? Object.assign({}, m.target) : null, status: m.target ? evalMission(m).text : null };
+  }
+  async function askAI(mode, message) {
+    const url = aiURL(); if (!url) return { offline: true };
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 28000);
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ mode, message, context: context(), history: history.slice(-6) }), signal: ctl.signal });
+      const j = await r.json(); if (!j.ok) throw new Error(j.error || 'permintaan gagal'); return { text: j.text };
+    } catch (e) { return { error: e.name === 'AbortError' ? 'waktu habis' : e.message }; } finally { clearTimeout(to); }
+  }
+  function offlineReply(q) {
+    const t = q.toLowerCase(), M = matrixOf(S).elements;
+    if (/matriks|matrix/.test(t)) return 'Iye. Matriks 4×4 saat ini punya kolom ke-4 = (' + fmt(M[12]) + ', ' + fmt(M[13]) + ', ' + fmt(M[14]) + '), yaitu posisi asal lopi. Blok 3×3 kiri atas memuat rotasi dikali skala. Ubah satu slider lalu lihat bagian mana yang berubah.';
+    if (/urutan|dibalik|order|trs|rts|komposisi/.test(t)) return 'Iye. Perkalian matriks tidak komutatif. Matriks paling kanan dikenakan paling dulu pada titik. T·R·S: skala, putar pada poros sendiri, lalu geser. R·T·S: skala, geser, lalu putar seluruhnya mengelilingi titik asal. Itu sebabnya lopi seolah mengorbit.';
+    if (/skala|scale|besar|kecil/.test(t)) return 'Skala seragam s mengalikan x, y, z dengan faktor yang sama. Pada matriks, s muncul di diagonal blok 3×3 dan tidak menggeser kolom ke-4.';
+    if (/rotasi|putar|sudut|haluan/.test(t)) return 'Rotasi pada sumbu Y memutar lopi seperti kompas di atas peta: sumbu hijau tetap, sumbu merah dan biru berputar. Sudut positif berlawanan arah jarum jam jika dilihat dari atas.';
+    if (/geser|translasi|pindah|labuh/.test(t)) return 'Translasi menambah (tx, ty, tz) pada setiap titik dan hanya mengubah kolom ke-4 matriks. Bentuk dan arah lopi tidak berubah.';
+    return offlineHint(MISSIONS[cur]);
+  }
+  async function sendChat(text) {
+    text = (text || '').trim(); if (!text) return;
+    addMsg('me', text); history.push({ role: 'user', text });
+    const wait = addMsg('ai', 'Daeng sedang berpikir…');
+    const r = await askAI('chat', text); let out;
+    if (r.text) out = r.text; else out = offlineReply(text) + (r.error ? '\n\n(GenAI tidak terjangkau: ' + r.error + '. Ini jawaban mode luring.)' : '\n\n(Mode luring. Sambungkan GenAI di bagian bawah tab ini untuk jawaban yang menyesuaikan.)');
+    wait.textContent = out; history.push({ role: 'model', text: out }); vrHint(out);
+  }
+  $('#chatForm').addEventListener('submit', e => { e.preventDefault(); const v = $('#chatIn').value; $('#chatIn').value = ''; sendChat(v); });
+  $('#chips').innerHTML = ['Beri petunjuk', 'Jelaskan matriks saat ini', 'Mengapa urutan penting?'].map(c => '<button type="button">' + c + '</button>').join('');
+  $('#chips').querySelectorAll('button').forEach(b => b.onclick = () => sendChat(b.textContent));
+  $('#aiSave').onclick = () => { const v = $('#aiUrl').value.trim(); if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(v)) { toast('Alamat harus berupa URL Apps Script yang berakhiran /exec.'); return; } try { localStorage.setItem('lopi-ai', v); } catch (_) {} pill(); toast('Endpoint tersimpan di peramban ini.'); };
+  $('#aiClear').onclick = () => { try { localStorage.removeItem('lopi-ai'); } catch (_) {} $('#aiUrl').value = ''; pill(); };
+  try { $('#aiUrl').value = localStorage.getItem('lopi-ai') || ''; } catch (_) {}
+
+  async function newChallenge() {
+    const btn = $('#btnChallenge'); btn.disabled = true; addMsg('ai', 'Daeng menyusun tantangan baru…');
+    const r = await askAI('challenge', 'Buat satu tantangan transformasi baru.'); let c = null;
+    if (r.text) { try { const j = JSON.parse(r.text.replace(/^```(?:json)?|```$/gm, '').trim()); if ([j.tx, j.tz, j.ry, j.s].every(Number.isFinite) && Math.abs(j.tx) <= 9 && Math.abs(j.tz) <= 9 && Math.abs(j.ry) <= 180 && j.s >= .5 && j.s <= 1.8 && typeof j.cerita === 'string') c = { story: j.cerita.slice(0, 420), tx: Math.round(j.tx * 2) / 2, tz: Math.round(j.tz * 2) / 2, ry: Math.round(j.ry / 5) * 5, s: Math.round(j.s * 10) / 10, ai: true }; } catch (_) {} }
+    if (!c) { const rr = (a, b) => Math.round((a + Math.random() * (b - a)) * 2) / 2; c = { tx: rr(-7, 7), tz: rr(-7, 7), ry: Math.round((Math.random() * 300 - 150) / 5) * 5, s: Math.round((0.7 + Math.random() * 0.9) * 10) / 10, story: 'Daeng menitipkan tantangan: sandarkan lopi di dermaga baru dengan haluan menghadap bintang penuntun.' }; }
+    const m = MISSIONS[5]; m.target = { tx: c.tx, tz: c.tz, ry: c.ry, s: c.s }; m.story = c.story;
+    m.goal = 'Cocokkan lopi dengan bayangan emas. Kamu boleh memakai urutan T · R · S atau R · T · S.'; m.title = 'Tantangan dari Daeng'; done.delete(5);
+    addMsg('ai', c.story + '\n\nTantangan siap di tab Misi (tombol "AI ★").' + (c.ai ? '' : '\n(Dibuat oleh mode luring.)'));
+    btn.disabled = false; showTab('Misi'); setMission(5);
+  }
+  $('#btnChallenge').onclick = newChallenge;
+  async function reflect() {
+    const v = ($('#reflectIn').value || '').trim(); const out = $('#reflectOut'); if (v.length < 15) { out.textContent = 'Tulis penjelasan yang sedikit lebih lengkap dulu.'; return; }
+    out.textContent = 'Daeng membaca jawabanmu…'; const r = await askAI('reflect', v);
+    if (r.text) { out.textContent = r.text; return; }
+    const t = v.toLowerCase(), hasOrder = /urutan|dulu|lebih awal|duluan/.test(t), hasOrigin = /titik asal|pusat|origin|mengelilingi|memutari|orbit/.test(t), hasNon = /komutatif|tidak sama|berbeda/.test(t);
+    out.textContent = (hasOrder && (hasOrigin || hasNon) ? 'Penjelasanmu sudah menangkap intinya.' : 'Penjelasanmu belum lengkap.') + '\nPeriksa tiga hal: (1) matriks paling kanan dikenakan lebih dulu, (2) rotasi berpusat di titik asal dunia, (3) karena itu geseran yang dikenai putaran ikut memutar lintasannya. ' + (hasOrder ? '' : 'Belum ada yang menyebut urutan penerapan. ') + (hasOrigin ? '' : 'Belum ada yang menyebut titik asal sebagai pusat putaran. ') + '\n(Penilaian kata kunci mode luring.)';
+  }
+
+  /* ---------- panel VR (laser controller) ---------- */
+  const vr = { body: null, status: null, vals: {} };
+  function vrBuild() {
+    const mk = (tag, attrs, parent) => { const e = document.createElement(tag); Object.keys(attrs).forEach(k => e.setAttribute(k, attrs[k])); (parent || vrPanel).appendChild(e); return e; };
+    mk('a-plane', { width: 1.15, height: .98, color: '#0b1626', opacity: .94, position: '0 0 0' });
+    const text = (val, x, y, o) => mk('a-entity', { position: x + ' ' + y + ' 0.01', text: 'value:' + val + ';align:' + ((o && o.align) || 'left') + ';color:' + ((o && o.color) || '#f3ecd9') + ';width:' + ((o && o.width) || 1.05) + ';wrapCount:' + ((o && o.wrap) || 44) + ';baseline:top' });
+    vr.title = text('', -0.53, 0.46, { color: '#e3a72f', wrap: 36 });
+    vr.body = text('', -0.53, 0.38, { wrap: 48 });
+    vr.status = text('', -0.53, 0.14, { color: '#8fd6cf', wrap: 48 });
+    const btn = (label, x, y, w, fn) => { const b = mk('a-plane', { class: 'vrbtn', width: w, height: .075, color: '#23415f', position: x + ' ' + y + ' 0.02' }); mk('a-entity', { text: 'value:' + label + ';align:center;color:#f3ecd9;width:' + (w * 1.9) + ';wrapCount:' + Math.max(10, Math.round(w * 60)), position: '0 0 0.01' }, b); b.addEventListener('click', fn); b.addEventListener('mouseenter', () => b.setAttribute('color', '#e3a72f')); b.addEventListener('mouseleave', () => b.setAttribute('color', '#23415f')); return b; };
+    const rows = [['tx', 'Geser X', .5, 0.05], ['tz', 'Geser Z', .5, -0.04], ['ry', 'Putar Y', 10, -0.13], ['s', 'Skala', .1, -0.22]];
+    rows.forEach(r => {
+      text(r[1], -0.53, r[3] + .03, { wrap: 20, width: .5 }); vr.vals[r[0]] = text('', .17, r[3] + .03, { wrap: 14, width: .4, color: '#e3a72f' });
+      btn('-', -0.05, r[3], .13, () => vrStep(r[0], -r[2])); btn('+', .1, r[3], .13, () => vrStep(r[0], r[2]));
+    });
+    vr.ord = btn('Urutan: T R S', 0.33, -0.17, .36, () => { const m = MISSIONS[cur]; if (m.locked.length && !m.free) { toast('Urutan dikunci pada misi ini.'); return; } S.order = S.order === 'TRS' ? 'RTS' : 'TRS'; refresh(); });
+    btn('Misi -', -0.38, -0.36, .3, () => setMission(cur - 1)); btn('Petunjuk AI', 0, -0.36, .36, () => sendChat('Beri aku petunjuk untuk misi ini tanpa langsung memberi angka jawabannya.')); btn('Misi +', .38, -0.36, .3, () => setMission(cur + 1));
+  }
+  function vrStep(k, d) {
+    const m = MISSIONS[cur]; if (m.locked.includes(k)) { toast('Kontrol ini dikunci pada misi ini.'); return; }
+    const c = CONTROLS.find(x => x.k === k); S[k] = Math.min(c.max, Math.max(c.min, Math.round((S[k] + d) * 100) / 100)); refresh();
+  }
+  function vrRefresh() {
+    if (!vr.body) return; const m = MISSIONS[cur], ev = m.target ? evalMission(m) : null;
+    vr.title.setAttribute('text', 'value', 'Misi ' + cur + ': ' + m.title);
+    if (!vr.hint) vr.body.setAttribute('text', 'value', m.goal || m.story);
+    vr.status.setAttribute('text', 'value', ev ? ev.text + (ev.ok ? '  [SELESAI]' : '') : 'Mode bebas');
+    vr.vals.tx.setAttribute('text', 'value', S.tx.toFixed(1)); vr.vals.tz.setAttribute('text', 'value', S.tz.toFixed(1)); vr.vals.ry.setAttribute('text', 'value', Math.round(S.ry) + ' deg'); vr.vals.s.setAttribute('text', 'value', S.s.toFixed(2));
+    vr.ord.querySelector('[text]').setAttribute('text', 'value', 'Urutan: ' + (S.order === 'TRS' ? 'T R S' : 'R T S'));
+  }
+  function vrHint(t) { if (!vr.body) return; vr.hint = true; vr.body.setAttribute('text', 'value', t.replace(/[^\x20-\x7E\n]/g, '').slice(0, 260)); clearTimeout(vrHint.h); vrHint.h = setTimeout(() => { vr.hint = false; vrRefresh(); }, 20000); }
+
+  /* ---------- mode desktop / VR / AR ---------- */
+  function setMode(mode) {
+    const dio = mode !== 'desk';
+    env.visible = !dio; farSea.visible = !dio; island.visible = true;
+    orbit.enabled = !dio; vrPanel.setAttribute('visible', mode === 'vr');
+    if (mode === 'desk') { stage.object3D.scale.set(1, 1, 1); stage.object3D.position.set(0, 0, 0); anchor.object3D.position.set(0, 0, 0); anchor.object3D.quaternion.identity(); anchor.object3D.visible = true; rig.object3D.rotation.set(0, 0, 0); orbit.apply(); sceneEl.object3D.background = skyTex; }
+    if (mode === 'vr') { stage.object3D.scale.set(.08, .08, .08); stage.object3D.position.set(0, .75, -1.7); rig.object3D.position.set(0, 0, 0); rig.object3D.rotation.set(0, 0, 0); sceneEl.object3D.background = skyTex; }
+    if (mode === 'ar') { stage.object3D.scale.set(.05, .05, .05); stage.object3D.position.set(0, 0, 0); anchor.object3D.position.set(0, 0, -1.2); rig.object3D.position.set(0, 0, 0); rig.object3D.rotation.set(0, 0, 0); sceneEl.object3D.background = null; }
+  }
+  sceneEl.addEventListener('enter-vr', () => { const ar = sceneEl.is('ar-mode'); setMode(ar ? 'ar' : 'vr'); if (ar) { sceneEl.setAttribute('ar-hit-test', 'enabled', true); toast('Arahkan ponsel ke lantai atau meja, lalu ketuk untuk menaruh lopi.'); } });
+  sceneEl.addEventListener('exit-vr', () => { sceneEl.setAttribute('ar-hit-test', 'enabled', false); setMode('desk'); });
+  sceneEl.addEventListener('ar-hit-test-select', () => { sceneEl.setAttribute('ar-hit-test', 'enabled', false); toast('Lopi ditaruh. Atur transformasinya lewat panel.'); });
+  async function enter(kind) {
+    if (!navigator.xr) { toast('Peramban ini belum mendukung WebXR. Mode 3D layar tetap bisa dipakai. Untuk AR gunakan Chrome Android, untuk VR gunakan headset.'); return; }
+    try {
+      const ok = await navigator.xr.isSessionSupported(kind === 'ar' ? 'immersive-ar' : 'immersive-vr');
+      if (!ok) { toast((kind === 'ar' ? 'AR' : 'VR') + ' tidak didukung perangkat ini. Mode 3D layar tetap bisa dipakai.'); return; }
+      if (kind === 'ar') { if (sceneEl.enterAR) sceneEl.enterAR(); else sceneEl.enterVR(true); } else sceneEl.enterVR();
+    } catch (e) { toast('Gagal masuk ' + kind.toUpperCase() + ': ' + e.message); }
+  }
+  $('#btnVR').onclick = () => enter('vr'); $('#btnAR').onclick = () => enter('ar');
+
+  vrBuild(); buildSliders(); renderProgress(); pill();
+  addMsg('ai', 'Iye, salama\'. Saya Daeng Pinisi. Selesaikan misi di tab Misi; kalau macet, minta petunjuk di sini. Saya akan memberi arah, bukan langsung jawabannya.');
+  setMission(0);
+  window.__lopi = { S, MISSIONS, matrixOf, poseDelta, setMission, refresh, evalMission };
+}
+if (sceneEl.hasLoaded) startApp(); else sceneEl.addEventListener('loaded', startApp);
+</script>
+</body>
+</html>
